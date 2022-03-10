@@ -1,0 +1,164 @@
+from datetime import datetime
+
+from telethon.utils import get_display_name
+
+from userbot.PetercordUserbot.logger import logging
+from . import edit_or_reply, CmdHelp, register
+from userbot import SUDO_USERS
+from ..PetercordUserbot import PLG_INFO
+from ..utils._wrappers import delete_PETERCORD as edit_delete
+from ..utils.peter import get_user_from_event, mentionuser
+from userbot.modules.sql_helper import global_collectionjson as sql
+from userbot.modules.sql_helper.globals import addgvar, delgvar, gvarstatus
+LOGS = logging.getLogger(__name__)
+
+
+async def _init() -> None:
+    sudousers = SUDO_USERS
+    SUDO_USERS.clear()
+    for user_d in sudousers:
+        SUDO_USERS.add(user_d)
+
+
+def get_key(val):
+    for key, value in PLG_INFO.items():
+        for cmd in value:
+            if val == cmd:
+                return key
+    return None
+
+
+@register(pattern=r"sudo(?: |$)(on|off)?", outgoing=True)
+async def chat_blacklist(event):
+    "To enable or disable sudo of your PetercordUserbot."
+    input_str = event.pattern_match.group(1)
+    sudousers = SUDO_USERS
+    if input_str == "on":
+        if gvarstatus("sudoenable") is not None:
+            return await edit_delete(event, "__Sudo is already enabled.__")
+        addgvar("sudoenable", "true")
+        text = "__Enabled sudo successfully.__\n"
+        if len(sudousers) != 0:
+            text += (
+                "**Bot is reloading to apply the changes. Please wait for a minute**"
+            )
+            msg = await edit_or_reply(
+                event,
+                text,
+            )
+            return await event.client.reload(msg)
+        else:
+            text += "**You haven't added anyone to your sudo yet.**"
+            return await edit_or_reply(
+                event,
+                text,
+            )
+    if gvarstatus("sudoenable") is not None:
+        delgvar("sudoenable")
+        text = "__Disabled sudo successfully.__"
+        if len(sudousers) != 0:
+            text += (
+                "**Bot is reloading to apply the changes. Please wait for a minute**"
+            )
+            msg = await edit_or_reply(
+                event,
+                text,
+            )
+            return await event.client.reload(msg)
+        else:
+            text += "**You haven't added any chat to blacklist yet.**"
+            return await edit_or_reply(
+                event,
+                text,
+            )
+    await edit_delete(event, "It was turned off already")
+
+
+@register(pattern="addsudo(?: |$)(.*)", outgoing=True)
+async def add_sudo_user(event):
+    "To add user to sudo."
+    replied_user, error_i_a = await get_user_from_event(event)
+    if replied_user is None:
+        return
+    if replied_user.id == event.client.uid:
+        return await edit_delete(event, "__You can't add yourself to sudo.__.")
+    if replied_user.id in SUDO_USERS:
+        return await edit_delete(
+            event,
+            f"{mentionuser(get_display_name(replied_user)),replied_user.id} __is already in your sudo list.__",
+        )
+    date = str(datetime.now().strftime("%B %d, %Y"))
+    userdata = {
+        "chat_id": replied_user.id,
+        "chat_name": get_display_name(replied_user),
+        "chat_username": replied_user.username,
+        "date": date,
+    }
+    try:
+        sudousers = sql.get_collection("sudousers_list").json
+    except AttributeError:
+        sudousers = {}
+    sudousers[str(replied_user.id)] = userdata
+    sql.del_collection("sudousers_list")
+    sql.add_collection("sudousers_list", sudousers, {})
+    output = f"{mentionuser(userdata['chat_name'],userdata['chat_id'])} __is Added to your sudo users.__\n"
+    output += "**Bot is reloading to apply the changes. Please wait for a minute**"
+    msg = await edit_or_reply(event, output)
+    await event.client.reload(msg)
+
+
+@register(pattern="delsudo(?: |$)(.*)", outgoing=True)
+async def _(event):
+    "To del user from sudo."
+    replied_user, error_i_a = await get_user_from_event(event)
+    if replied_user is None:
+        return
+    try:
+        sudousers = sql.get_collection("sudousers_list").json
+    except AttributeError:
+        sudousers = {}
+    if str(replied_user.id) not in sudousers:
+        return await edit_delete(
+            event,
+            f"{mentionuser(get_display_name(replied_user)),replied_user.id} __is not in your sudo__.",
+        )
+    del sudousers[str(replied_user.id)]
+    sql.del_collection("sudousers_list")
+    sql.add_collection("sudousers_list", sudousers, {})
+    output = f"{mentionuser(get_display_name(replied_user),replied_user.id)} __is removed from your sudo users.__\n"
+    output += "**Bot is reloading to apply the changes. Please wait for a minute**"
+    msg = await edit_or_reply(event, output)
+    await event.client.reload(msg)
+
+
+@register(pattern="vsudo(?: |$)(.*)", outgoing=True)
+async def _(event):
+    "To list Your sudo users"
+    sudochats = SUDO_USERS
+    try:
+        sudousers = sql.get_collection("sudousers_list").json
+    except AttributeError:
+        sudousers = {}
+    if len(sudochats) == 0:
+        return await edit_delete(
+            event, "__There are no sudo users for your Petercord userbot.__"
+        )
+    result = "**The list of sudo users for your Petercord userbot are :**\n\n"
+    for chat in sudochats:
+        result += f"☞ **Name:** {mentionuser(sudousers[str(chat)]['chat_name'],sudousers[str(chat)]['chat_id'])}\n"
+        result += f"**Chat Id :** `{chat}`\n"
+        username = f"@{sudousers[str(chat)]['chat_username']}" or "__None__"
+        result += f"**Username :** {username}\n"
+        result += f"Added on {sudousers[str(chat)]['date']}\n\n"
+    await edit_or_reply(event, result)
+
+
+CmdHelp("sudo").add_command(
+    'sudo', 'on/off', 'Mengirim gambar payudara acak'
+).add_command(
+    'addsudo', 'replay pengguna/username/id', 'Menambahkan sudo'
+).add_command(
+    'delsudo', 'replay pengguna/username/id', 'Menghapus sudo'
+).add_command(
+    'vsudo', None, 'Melihat daftar sudo'
+).add()

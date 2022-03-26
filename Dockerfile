@@ -1,14 +1,13 @@
 #Ilham Mansiez
 #Petercord Userbot
 #Tentang AKU DAN DIA
-FROM  ilhammansiz17/ilham-mansiez-petercord:Petercord-Userbot
 
-RUN git clone -b Petercord-Userbot https://github.com/ilham77mansiz/-PETERCORD- /root/userbot
-RUN mkdir /root/userbot/.bin
-RUN pip install --upgrade pip setuptools
-WORKDIR /root/userbot
+FROM ilhammansiz17/ilham-mansiez-petercord:Petercord-Userbot
 
-#Install python requirements
-RUN pip3 install -r https://raw.githubusercontent.com/ilham77mansiz/-PETERCORD-/Petercord-Userbot/requirements.txt
+RUN git clone -b Petercord-Userbot https://github.com/ilham77mansiz/-PETERCORD-  /home/userbot/ \
+    && chmod 777 /home/userbot \
+    && mkdir /home/userbot/bin/
+
+WORKDIR /home/userbot/
 
 CMD ["python3","-m","userbot"]
